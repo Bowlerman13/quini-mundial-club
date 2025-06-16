@@ -1,0 +1,329 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
+import { useToast } from "@/hooks/use-toast"
+import { getTeamLogo } from "@/lib/team-logos"
+import type { Match } from "@/lib/db"
+
+export function AdminPanel() {
+  const [matches, setMatches] = useState<Match[]>([])
+  const [results, setResults] = useState<Record<number, { home: number; away: number }>>({})
+  const [isLoading, setIsLoading] = useState(false)
+  const [filter, setFilter] = useState<string>("all")
+  const { toast } = useToast()
+
+  useEffect(() => {
+    loadMatches()
+  }, [])
+
+  const loadMatches = async () => {
+    try {
+      const response = await fetch("/api/matches")
+      if (response.ok) {
+        const data = await response.json()
+        setMatches(data)
+      }
+    } catch (error) {
+      console.error("Error loading matches:", error)
+    }
+  }
+
+  const handleResultChange = (matchId: number, type: "home" | "away", value: string) => {
+    const numValue = Number.parseInt(value) || 0
+    setResults((prev) => ({
+      ...prev,
+      [matchId]: {
+        ...prev[matchId],
+        [type]: numValue,
+      },
+    }))
+  }
+
+  const saveResult = async (matchId: number) => {
+    const result = results[matchId]
+    if (!result) return
+
+    setIsLoading(true)
+    try {
+      const response = await fetch("/api/admin/results", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          matchId,
+          homeScore: result.home,
+          awayScore: result.away,
+        }),
+      })
+
+      if (response.ok) {
+        toast({
+          title: "✅ Resultado guardado",
+          description: "El resultado ha sido actualizado y los puntos calculados automáticamente",
+        })
+        loadMatches() // Reload matches
+        setResults((prev) => {
+          const newResults = { ...prev }
+          delete newResults[matchId]
+          return newResults
+        })
+      } else {
+        const data = await response.json()
+        toast({
+          title: "❌ Error",
+          description: data.error,
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "❌ Error",
+        description: "Error de conexión",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("es-ES", {
+      weekday: "short",
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  }
+
+  const getPhaseLabel = (phase: string) => {
+    switch (phase) {
+      case "group":
+        return "Fase de Grupos"
+      case "round_16":
+        return "Octavos de Final"
+      case "quarter_final":
+        return "Cuartos de Final"
+      case "semi_final":
+        return "Semifinales"
+      case "third_place":
+        return "Tercer Puesto"
+      case "final":
+        return "Final"
+      default:
+        return phase
+    }
+  }
+
+  const filteredMatches = matches.filter((match) => {
+    if (filter === "all") return true
+    if (filter === "pending") return !match.is_finished
+    if (filter === "finished") return match.is_finished
+    return match.phase === filter
+  })
+
+  const groupedMatches = filteredMatches.reduce(
+    (acc, match) => {
+      const key = match.phase === "group" ? `Grupo ${match.group_letter}` : getPhaseLabel(match.phase)
+      if (!acc[key]) acc[key] = []
+      acc[key].push(match)
+      return acc
+    },
+    {} as Record<string, Match[]>,
+  )
+
+  return (
+    <div className="space-y-6">
+      <div className="text-center">
+        <h2 className="text-2xl font-bold">🔑 Panel de Superadministrador</h2>
+        <p className="text-muted-foreground">Gestiona los resultados de los partidos del Mundial de Clubes</p>
+      </div>
+
+      {/* Filtros */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">🔍 Filtros</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-2">
+            <Button variant={filter === "all" ? "default" : "outline"} size="sm" onClick={() => setFilter("all")}>
+              Todos los partidos
+            </Button>
+            <Button
+              variant={filter === "pending" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFilter("pending")}
+            >
+              ⏳ Pendientes
+            </Button>
+            <Button
+              variant={filter === "finished" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFilter("finished")}
+            >
+              ✅ Finalizados
+            </Button>
+            <Button variant={filter === "group" ? "default" : "outline"} size="sm" onClick={() => setFilter("group")}>
+              🏟️ Fase de Grupos
+            </Button>
+            <Button
+              variant={filter === "round_16" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFilter("round_16")}
+            >
+              🎯 Octavos
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Estadísticas */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4 text-center">
+            <div className="text-2xl font-bold text-blue-600">{matches.length}</div>
+            <div className="text-sm text-muted-foreground">Total partidos</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <div className="text-2xl font-bold text-green-600">{matches.filter((m) => m.is_finished).length}</div>
+            <div className="text-sm text-muted-foreground">Finalizados</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <div className="text-2xl font-bold text-orange-600">{matches.filter((m) => !m.is_finished).length}</div>
+            <div className="text-sm text-muted-foreground">Pendientes</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <div className="text-2xl font-bold text-purple-600">{Object.keys(groupedMatches).length}</div>
+            <div className="text-sm text-muted-foreground">Fases/Grupos</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Lista de partidos */}
+      <div className="space-y-4">
+        {Object.entries(groupedMatches).map(([groupName, groupMatches]) => (
+          <Card key={groupName}>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center justify-between">
+                <span>{groupName}</span>
+                <Badge variant="outline">
+                  {groupMatches.filter((m) => m.is_finished).length}/{groupMatches.length} finalizados
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {groupMatches.map((match) => {
+                const currentResult = results[match.id] || { home: match.home_score || 0, away: match.away_score || 0 }
+
+                return (
+                  <div
+                    key={match.id}
+                    className={`border rounded-lg p-4 space-y-3 ${match.is_finished ? "bg-green-50 border-green-200" : "bg-yellow-50 border-yellow-200"}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-muted-foreground">📅 {formatDate(match.match_date)}</div>
+                      {match.is_finished && (
+                        <Badge variant="secondary" className="bg-green-100 text-green-800">
+                          ✅ Finalizado: {match.home_score} - {match.away_score}
+                        </Badge>
+                      )}
+                      {!match.is_finished && (
+                        <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
+                          ⏳ Pendiente
+                        </Badge>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 text-center flex flex-col items-center">
+                        <div className="w-16 h-16 mb-2">
+                          <img
+                            src={getTeamLogo(match.home_team?.name || "")}
+                            alt={match.home_team?.name}
+                            className="w-full h-full object-contain"
+                          />
+                        </div>
+                        <div className="font-medium">{match.home_team?.name}</div>
+                        <div className="text-sm text-muted-foreground">🏴 {match.home_team?.country}</div>
+                      </div>
+
+                      <div className="flex items-center space-x-2 mx-4">
+                        <div className="flex flex-col items-center space-y-1">
+                          <Label className="text-xs font-semibold">Local</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            max="20"
+                            className="w-16 text-center font-bold"
+                            value={currentResult.home}
+                            onChange={(e) => handleResultChange(match.id, "home", e.target.value)}
+                          />
+                        </div>
+
+                        <div className="text-xl font-bold">-</div>
+
+                        <div className="flex flex-col items-center space-y-1">
+                          <Label className="text-xs font-semibold">Visitante</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            max="20"
+                            className="w-16 text-center font-bold"
+                            value={currentResult.away}
+                            onChange={(e) => handleResultChange(match.id, "away", e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex-1 text-center flex flex-col items-center">
+                        <div className="w-16 h-16 mb-2">
+                          <img
+                            src={getTeamLogo(match.away_team?.name || "")}
+                            alt={match.away_team?.name}
+                            className="w-full h-full object-contain"
+                          />
+                        </div>
+                        <div className="font-medium">{match.away_team?.name}</div>
+                        <div className="text-sm text-muted-foreground">🏴 {match.away_team?.country}</div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-center">
+                      <Button
+                        onClick={() => saveResult(match.id)}
+                        disabled={isLoading}
+                        size="sm"
+                        className="bg-red-600 hover:bg-red-700 text-white font-semibold"
+                      >
+                        💾 {match.is_finished ? "🔄 Actualizar Resultado" : "✅ Guardar Resultado"}
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {filteredMatches.length === 0 && (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <div className="text-muted-foreground">No hay partidos que coincidan con el filtro seleccionado</div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  )
+}
