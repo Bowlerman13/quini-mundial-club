@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import type { UserRanking } from "@/lib/db"
 
 export function RankingsDashboard() {
@@ -53,6 +54,14 @@ export function RankingsDashboard() {
     }
   }
 
+  const sendWhatsAppMessage = (phone: string, userName: string, position: number, points: number) => {
+    if (!phone) return
+
+    const message = `🏆 ¡Hola ${userName}! Estás en la posición ${position} de la Quiniela FIFA Club World Cup 2025 con ${points} puntos. ¡Sigue participando! ⚽`
+    const whatsappUrl = `https://wa.me/${phone.replace(/[^\d]/g, "")}?text=${encodeURIComponent(message)}`
+    window.open(whatsappUrl, "_blank")
+  }
+
   if (isLoading) {
     return (
       <Card>
@@ -71,12 +80,17 @@ export function RankingsDashboard() {
           <span>🏆</span>
           Clasificación General
         </CardTitle>
-        <CardDescription>Puntuación: 3 puntos por marcador exacto, 1 punto por resultado correcto</CardDescription>
+        <CardDescription>
+          Puntuación: 3 puntos por marcador exacto, 1 punto por resultado correcto
+          <br />📱 Usuarios con WhatsApp: {rankings.filter((u) => u.user_phone).length} de {rankings.length}
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
           {rankings.map((user, index) => {
             const position = index + 1
+            const hasWhatsApp = user.user_phone && user.user_phone.trim() !== ""
+
             return (
               <div
                 key={user.user_id}
@@ -87,8 +101,18 @@ export function RankingsDashboard() {
                 <div className="flex items-center gap-3">
                   <div className="flex items-center justify-center w-8 h-8 text-lg">{getRankIcon(position)}</div>
                   <div>
-                    <div className="font-medium">{user.user_name}</div>
-                    <div className="text-sm text-muted-foreground">{user.predictions_count} pronósticos</div>
+                    <div className="font-medium flex items-center gap-2">
+                      {user.user_name}
+                      {hasWhatsApp && (
+                        <span className="text-green-600 text-sm" title="Usuario con WhatsApp">
+                          📱
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {user.predictions_count} pronósticos
+                      {hasWhatsApp && <span className="ml-2 text-green-600">• WhatsApp disponible</span>}
+                    </div>
                   </div>
                 </div>
 
@@ -99,6 +123,16 @@ export function RankingsDashboard() {
                       Top {position}
                     </Badge>
                   )}
+                  {hasWhatsApp && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs bg-green-50 border-green-300 text-green-700 hover:bg-green-100"
+                      onClick={() => sendWhatsAppMessage(user.user_phone!, user.user_name, position, user.total_points)}
+                    >
+                      💬 WhatsApp
+                    </Button>
+                  )}
                 </div>
               </div>
             )
@@ -107,6 +141,21 @@ export function RankingsDashboard() {
           {rankings.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">No hay participantes registrados aún</div>
           )}
+        </div>
+
+        {/* Estadísticas de WhatsApp */}
+        <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+          <h4 className="font-semibold text-green-800 mb-2">📊 Estadísticas de Notificaciones</h4>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <div className="text-green-600 font-medium">{rankings.filter((u) => u.user_phone).length}</div>
+              <div className="text-green-700">Usuarios con WhatsApp</div>
+            </div>
+            <div>
+              <div className="text-green-600 font-medium">{rankings.filter((u) => !u.user_phone).length}</div>
+              <div className="text-green-700">Sin WhatsApp</div>
+            </div>
+          </div>
         </div>
       </CardContent>
     </Card>

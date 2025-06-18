@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { getTeamLogo } from "@/lib/team-logos"
+import { formatDetailedTimestamp } from "@/lib/matches"
 import type { Prediction } from "@/lib/db"
 
 interface PredictionHistoryProps {
@@ -30,21 +31,6 @@ export function PredictionHistory({ userId }: PredictionHistoryProps) {
     } finally {
       setIsLoading(false)
     }
-  }
-
-  const formatPredictionDate = (dateString: string) => {
-    if (!dateString) return ""
-
-    const options: Intl.DateTimeFormatOptions = {
-      timeZone: "America/Los_Angeles",
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }
-
-    return new Date(dateString).toLocaleString("es-ES", options) + " (PT)"
   }
 
   if (isLoading) {
@@ -78,7 +64,7 @@ export function PredictionHistory({ userId }: PredictionHistoryProps) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <span>📜</span>
-          Historial de Pronósticos
+          Historial Detallado de Pronósticos
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -87,7 +73,13 @@ export function PredictionHistory({ userId }: PredictionHistoryProps) {
             <div key={prediction.id} className="border rounded-lg p-4">
               <div className="flex justify-between items-center mb-2">
                 <div className="text-sm text-muted-foreground">
-                  Pronóstico realizado: {formatPredictionDate(prediction.created_at)}
+                  <div className="font-semibold text-blue-600">📅 Pronóstico registrado:</div>
+                  <div className="text-xs mt-1">{formatDetailedTimestamp(prediction.created_at)}</div>
+                  {prediction.updated_at && prediction.updated_at !== prediction.created_at && (
+                    <div className="text-xs mt-1 text-orange-600">
+                      🔄 Última actualización: {formatDetailedTimestamp(prediction.updated_at)}
+                    </div>
+                  )}
                 </div>
                 <Badge variant={prediction.match?.is_finished ? "secondary" : "outline"}>
                   {prediction.match?.is_finished ? "Finalizado" : "Pendiente"}
@@ -137,6 +129,24 @@ export function PredictionHistory({ userId }: PredictionHistoryProps) {
                     />
                   </div>
                   <div className="font-medium text-sm">{prediction.match?.away_team?.name}</div>
+                </div>
+              </div>
+
+              {/* Información técnica detallada */}
+              <div className="mt-3 p-2 bg-gray-50 rounded text-xs text-gray-600">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <strong>ID Pronóstico:</strong> #{prediction.id}
+                  </div>
+                  <div>
+                    <strong>ID Partido:</strong> #{prediction.match_id}
+                  </div>
+                  <div>
+                    <strong>Fase:</strong> {prediction.match?.phase}
+                  </div>
+                  <div>
+                    <strong>Grupo:</strong> {prediction.match?.group_letter || "N/A"}
+                  </div>
                 </div>
               </div>
             </div>
