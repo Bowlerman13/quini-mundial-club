@@ -8,11 +8,12 @@ export function getTeamLogo(teamName: string): string {
     "Chelsea" : "https://upload.wikimedia.org/wikipedia/en/c/cc/Chelsea_FC.svg",
     "Juventus": "https://upload.wikimedia.org/wikipedia/commons/4/4e/Juventus_FC_-_logo_black_%28Italy%2C_2017%29.svg",
     "Borussia Dortmund": "https://upload.wikimedia.org/wikipedia/commons/6/67/Borussia_Dortmund_logo.svg",
-    "Manchester United": "https://upload.wikimedia.org/wikipedia/en/7/7a/Manchester_United_FC_crest.svg",
+    "Inter Milan": "https://upload.wikimedia.org/wikipedia/commons/0/05/FC_Internazionale_Milano_2021.svg",
     "PSG": "https://upload.wikimedia.org/wikipedia/en/a/a7/Paris_Saint-Germain_F.C..svg",
     "Atlético Madrid": "https://upload.wikimedia.org/wikipedia/fr/9/93/Logo_Atl%C3%A9tico_Madrid_2017.svg",
     "Benfica": "https://upload.wikimedia.org/wikipedia/en/a/a2/SL_Benfica_logo.svg",
     "Porto": "https://upload.wikimedia.org/wikipedia/en/f/f1/FC_Porto.svg",
+    "RB Salzburg": "https://upload.wikimedia.org/wikipedia/en/7/77/FC_Red_Bull_Salzburg_logo.svg",
 
     // Equipos sudamericanos
     "Flamengo": "https://upload.wikimedia.org/wikipedia/commons/2/2e/Flamengo_braz_logo.svg",
@@ -46,5 +47,8 @@ export function getTeamLogo(teamName: string): string {
   }
 
   // Devolver el logo si existe, o un placeholder si no
-  return logos[teamName] || `https://via.placeholder.com/50?text=${encodeURIComponent(teamName)}`
+  return (
+    logos[teamName] ||
+    `https://via.placeholder.com/50x50/FFD700/000000?text=${encodeURIComponent(teamName.substring(0, 3))}`
+  )
 }

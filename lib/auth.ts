@@ -9,7 +9,7 @@ export async function verifyPassword(password: string, hashedPassword: string): 
   return bcrypt.compare(password, hashedPassword)
 }
 
-export async function createUser(name: string, email: string, password: string) {
+export async function createUser(name: string, email: string, phone: string | null, password: string) {
   if (!sql) {
     throw new Error("Database connection not available")
   }
@@ -17,9 +17,9 @@ export async function createUser(name: string, email: string, password: string) 
   const hashedPassword = await hashPassword(password)
 
   const result = await sql`
-    INSERT INTO users (name, email, password, role)
-    VALUES (${name}, ${email}, ${hashedPassword}, 'user')
-    RETURNING id, name, email, role, created_at
+    INSERT INTO users (name, email, phone, password, role)
+    VALUES (${name}, ${email}, ${phone}, ${hashedPassword}, 'user')
+    RETURNING id, name, email, phone, role, created_at
   `
 
   return result[0]
@@ -31,7 +31,7 @@ export async function getUserByEmail(email: string) {
   }
 
   const result = await sql`
-    SELECT id, name, email, password, role, created_at
+    SELECT id, name, email, phone, password, role, created_at
     FROM users
     WHERE email = ${email}
   `

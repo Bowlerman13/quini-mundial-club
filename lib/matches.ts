@@ -1,7 +1,32 @@
 import { sql } from "./db"
 import type { Match, Prediction } from "./db"
 
-// Función para formatear fechas en zona horaria del Pacífico
+// Función para formatear fechas con MÁXIMO DETALLE (incluyendo microsegundos)
+export function formatDetailedTimestamp(date: Date | string): string {
+  const options: Intl.DateTimeFormatOptions = {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    fractionalSecondDigits: 3, // Mostrar milisegundos
+  }
+
+  const dateObj = new Date(date)
+  const formatted = dateObj.toLocaleString("es-ES", options)
+
+  // Agregar información adicional
+  const dayName = dateObj.toLocaleDateString("es-ES", {
+    timeZone: "America/Los_Angeles",
+    weekday: "long",
+  })
+
+  return `${dayName}, ${formatted} (Hora del Pacífico)`
+}
+
+// Función para formatear fechas en zona horaria del Pacífico (versión corta)
 export function formatToPacificTime(date: Date | string): string {
   const options: Intl.DateTimeFormatOptions = {
     timeZone: "America/Los_Angeles",
@@ -87,6 +112,7 @@ export async function getUserPredictions(userId: number): Promise<Prediction[]> 
     away_score_prediction: row.away_score_prediction,
     points_earned: row.points_earned,
     created_at: row.created_at,
+    updated_at: row.updated_at,
     match: {
       id: row.match_id,
       team_home_id: 0,
@@ -118,21 +144,22 @@ export async function savePrediction(userId: number, matchId: number, homeScore:
     throw new Error("Database connection not available")
   }
 
-  // Usar la zona horaria del Pacífico para el timestamp
+  // Usar CURRENT_TIMESTAMP(6) para máxima precisión con microsegundos
   const result = await sql`
-    INSERT INTO predictions (user_id, match_id, home_score_prediction, away_score_prediction, created_at)
+    INSERT INTO predictions (user_id, match_id, home_score_prediction, away_score_prediction, created_at, updated_at)
     VALUES (
       ${userId}, 
       ${matchId}, 
       ${homeScore}, 
       ${awayScore}, 
-      CURRENT_TIMESTAMP AT TIME ZONE 'America/Los_Angeles'
+      CURRENT_TIMESTAMP(6) AT TIME ZONE 'America/Los_Angeles',
+      CURRENT_TIMESTAMP(6) AT TIME ZONE 'America/Los_Angeles'
     )
     ON CONFLICT (user_id, match_id)
     DO UPDATE SET 
       home_score_prediction = ${homeScore},
       away_score_prediction = ${awayScore},
-      created_at = CURRENT_TIMESTAMP AT TIME ZONE 'America/Los_Angeles'
+      updated_at = CURRENT_TIMESTAMP(6) AT TIME ZONE 'America/Los_Angeles'
     RETURNING *
   `
 
@@ -205,12 +232,29 @@ export async function getRankings() {
     SELECT 
       u.id as user_id,
       u.name as user_name,
+      u.phone as user_phone,
       COALESCE(SUM(p.points_earned), 0) as total_points,
       COUNT(p.id) as predictions_count
     FROM users u
     LEFT JOIN predictions p ON u.id = p.user_id
-    GROUP BY u.id, u.name
+    GROUP BY u.id, u.name, u.phone
     ORDER BY total_points DESC, predictions_count DESC
+  `
+
+  return result
+}
+
+// Nueva función para obtener usuarios con WhatsApp para notificaciones
+export async function getUsersWithWhatsApp() {
+  if (!sql) {
+    throw new Error("Database connection not available")
+  }
+
+  const result = await sql`
+    SELECT id, name, email, phone
+    FROM users
+    WHERE phone IS NOT NULL AND phone != ''
+    ORDER BY name
   `
 
   return result

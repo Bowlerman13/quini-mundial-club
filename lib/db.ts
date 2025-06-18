@@ -17,6 +17,7 @@ export type User = {
   id: number
   name: string
   email: string
+  phone?: string | null
   role: string
   created_at: string
 }
@@ -50,12 +51,14 @@ export type Prediction = {
   away_score_prediction: number
   points_earned: number
   created_at: string
+  updated_at?: string
   match?: Match
 }
 
 export type UserRanking = {
   user_id: number
   user_name: string
+  user_phone?: string | null
   total_points: number
   predictions_count: number
 }
