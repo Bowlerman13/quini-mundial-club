@@ -15,11 +15,13 @@ interface AuthFormProps {
 
 export function AuthForm({ onLogin }: AuthFormProps) {
   const [isLoading, setIsLoading] = useState(false)
+  const [debugInfo, setDebugInfo] = useState<string>("")
   const { toast } = useToast()
 
   const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsLoading(true)
+    setDebugInfo("Iniciando registro...")
 
     const formData = new FormData(e.currentTarget)
     const name = formData.get("name") as string
@@ -27,47 +29,83 @@ export function AuthForm({ onLogin }: AuthFormProps) {
     const phone = formData.get("phone") as string
     const password = formData.get("password") as string
 
-    // Validar formato de teléfono (básico)
-    const phoneRegex = /^[+]?[1-9][\d]{0,15}$/
-    if (phone && !phoneRegex.test(phone.replace(/[\s\-$$$$]/g, ""))) {
+    console.log("📝 Datos del formulario:", { name, email, phone: phone ? "***" : null, hasPassword: !!password })
+
+    // Validaciones del lado del cliente
+    if (!name || !email || !password) {
       toast({
         title: "Error",
-        description: "Por favor ingresa un número de teléfono válido (ej: +1234567890)",
+        description: "Por favor completa todos los campos requeridos",
         variant: "destructive",
       })
       setIsLoading(false)
       return
     }
 
+    if (password.length < 6) {
+      toast({
+        title: "Error",
+        description: "La contraseña debe tener al menos 6 caracteres",
+        variant: "destructive",
+      })
+      setIsLoading(false)
+      return
+    }
+
+    // Validar formato de teléfono (básico)
+    if (phone) {
+      const phoneRegex = /^[+]?[1-9][\d]{0,15}$/
+      const cleanPhone = phone.replace(/[\s\-()]/g, "")
+      if (!phoneRegex.test(cleanPhone)) {
+        toast({
+          title: "Error",
+          description: "Por favor ingresa un número de teléfono válido (ej: +1234567890)",
+          variant: "destructive",
+        })
+        setIsLoading(false)
+        return
+      }
+    }
+
     try {
+      setDebugInfo("Enviando datos al servidor...")
+
       const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, phone, password }),
       })
 
+      setDebugInfo(`Respuesta del servidor: ${response.status}`)
+
       const data = await response.json()
+      console.log("📨 Respuesta del servidor:", data)
 
       if (response.ok) {
         toast({
-          title: "Registro exitoso",
+          title: "✅ Registro exitoso",
           description: "Tu cuenta ha sido creada. Ahora puedes iniciar sesión.",
         })
         // Limpiar formulario
         ;(e.target as HTMLFormElement).reset()
+        setDebugInfo("Usuario creado exitosamente")
       } else {
+        console.error("❌ Error del servidor:", data)
         toast({
-          title: "Error",
-          description: data.error,
+          title: "❌ Error",
+          description: data.error || "Error desconocido",
           variant: "destructive",
         })
+        setDebugInfo(`Error: ${data.error}`)
       }
     } catch (error) {
+      console.error("💥 Error de red:", error)
       toast({
-        title: "Error",
-        description: "Error de conexión",
+        title: "❌ Error",
+        description: "Error de conexión. Verifica tu internet.",
         variant: "destructive",
       })
+      setDebugInfo(`Error de conexión: ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       setIsLoading(false)
     }
@@ -76,6 +114,7 @@ export function AuthForm({ onLogin }: AuthFormProps) {
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsLoading(true)
+    setDebugInfo("Iniciando sesión...")
 
     const formData = new FormData(e.currentTarget)
     const email = formData.get("email") as string
@@ -93,22 +132,25 @@ export function AuthForm({ onLogin }: AuthFormProps) {
       if (response.ok) {
         onLogin(data.user)
         toast({
-          title: "Bienvenido",
+          title: "✅ Bienvenido",
           description: "Has iniciado sesión correctamente",
         })
+        setDebugInfo("Sesión iniciada exitosamente")
       } else {
         toast({
-          title: "Error",
+          title: "❌ Error",
           description: data.error,
           variant: "destructive",
         })
+        setDebugInfo(`Error de login: ${data.error}`)
       }
     } catch (error) {
       toast({
-        title: "Error",
+        title: "❌ Error",
         description: "Error de conexión",
         variant: "destructive",
       })
+      setDebugInfo(`Error de conexión: ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       setIsLoading(false)
     }
@@ -174,11 +216,18 @@ export function AuthForm({ onLogin }: AuthFormProps) {
               <TabsContent value="register">
                 <form onSubmit={handleRegister} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="register-name">Nombre Completo</Label>
-                    <Input id="register-name" name="name" type="text" placeholder="Tu nombre completo" required />
+                    <Label htmlFor="register-name">Nombre Completo *</Label>
+                    <Input
+                      id="register-name"
+                      name="name"
+                      type="text"
+                      placeholder="Tu nombre completo"
+                      required
+                      minLength={2}
+                    />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="register-email">Email</Label>
+                    <Label htmlFor="register-email">Email *</Label>
                     <Input id="register-email" name="email" type="email" placeholder="tu@email.com" required />
                   </div>
                   <div className="space-y-2">
@@ -195,15 +244,36 @@ export function AuthForm({ onLogin }: AuthFormProps) {
                     <p className="text-xs text-gray-500">💬 Para recibir notificaciones de resultados por WhatsApp</p>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="register-password">Contraseña</Label>
-                    <Input id="register-password" name="password" type="password" required />
+                    <Label htmlFor="register-password">Contraseña *</Label>
+                    <Input
+                      id="register-password"
+                      name="password"
+                      type="password"
+                      required
+                      minLength={6}
+                      placeholder="Mínimo 6 caracteres"
+                    />
                   </div>
                   <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? "Registrando..." : "Registrarse"}
+                    {isLoading ? (
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Registrando...
+                      </div>
+                    ) : (
+                      "Registrarse"
+                    )}
                   </Button>
                 </form>
               </TabsContent>
             </Tabs>
+
+            {/* Debug info en desarrollo */}
+            {process.env.NODE_ENV === "development" && debugInfo && (
+              <div className="mt-4 p-2 bg-gray-100 rounded text-xs text-gray-600">
+                <strong>Debug:</strong> {debugInfo}
+              </div>
+            )}
           </CardContent>
         </Card>
 

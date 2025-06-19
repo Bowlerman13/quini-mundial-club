@@ -14,7 +14,7 @@ interface MainDashboardProps {
   onLogout: () => void
 }
 
-// Hook integrado para pull-to-refresh
+// Hook integrado para pull-to-refresh MEJORADO
 function usePullToRefresh({
   onRefresh,
   threshold = 80,
@@ -94,7 +94,7 @@ function usePullToRefresh({
   }
 }
 
-// Componente integrado para el indicador
+// Componente integrado para el indicador MEJORADO
 function PullToRefreshIndicator({
   isVisible,
   pullDistance,
@@ -110,17 +110,17 @@ function PullToRefreshIndicator({
 
   return (
     <div
-      className="fixed top-0 left-0 right-0 z-50 flex items-center justify-center bg-gradient-to-b from-yellow-500 to-amber-500 text-white transition-all duration-200 ease-out"
+      className="fixed top-0 left-0 right-0 z-[60] flex items-center justify-center bg-gradient-to-b from-yellow-500 to-amber-500 text-white transition-all duration-200 ease-out shadow-lg"
       style={{
-        height: isRefreshing ? "60px" : `${Math.min(pullDistance, 60)}px`,
-        transform: isRefreshing ? "translateY(0)" : `translateY(${Math.min(pullDistance - 60, 0)}px)`,
+        height: isRefreshing ? "70px" : `${Math.min(pullDistance, 70)}px`,
+        transform: isRefreshing ? "translateY(0)" : `translateY(${Math.min(pullDistance - 70, 0)}px)`,
       }}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 px-4">
         {isRefreshing ? (
           <>
             <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            <span className="font-semibold">🔄 Actualizando resultados...</span>
+            <span className="font-semibold text-sm">🔄 Actualizando resultados...</span>
           </>
         ) : (
           <>
@@ -132,7 +132,7 @@ function PullToRefreshIndicator({
             >
               <div className="w-2 h-2 bg-white rounded-full" />
             </div>
-            <span className="font-semibold">
+            <span className="font-semibold text-sm">
               {progress >= 1 ? "🚀 Suelta para actualizar" : "⬇️ Desliza para actualizar"}
             </span>
           </>
@@ -145,6 +145,7 @@ function PullToRefreshIndicator({
 export function MainDashboard({ user, onLogout }: MainDashboardProps) {
   const isSuperAdmin = user.role === "superadmin"
   const [refreshKey, setRefreshKey] = useState(0)
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   const { toast } = useToast()
 
   // Pull to refresh functionality
@@ -155,11 +156,12 @@ export function MainDashboard({ user, onLogout }: MainDashboardProps) {
 
       // Forzar re-render de componentes
       setRefreshKey((prev) => prev + 1)
+      setLastRefresh(new Date())
 
       // Mostrar notificación
       toast({
         title: "✅ Actualizado",
-        description: "Los datos se han actualizado correctamente",
+        description: `Datos actualizados a las ${new Date().toLocaleTimeString()}`,
       })
     },
     threshold: 80,
@@ -168,7 +170,7 @@ export function MainDashboard({ user, onLogout }: MainDashboardProps) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-yellow-50 to-amber-100">
-      {/* Pull to Refresh Indicator */}
+      {/* Pull to Refresh Indicator - POSICIÓN MEJORADA */}
       <PullToRefreshIndicator
         isVisible={isPulling}
         pullDistance={pullDistance}
@@ -176,14 +178,15 @@ export function MainDashboard({ user, onLogout }: MainDashboardProps) {
         progress={refreshProgress}
       />
 
-      <header className="bg-white shadow-sm border-b sticky top-0 z-40">
+      {/* Header con z-index mejorado */}
+      <header className="bg-white shadow-sm border-b sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-3">
               {/* Logo pequeño en header */}
               <div className="w-10 h-10">
                 <img
-                  src="https://upload.wikimedia.org/wikipedia/commons/a/ad/2025_FIFA_Club_World_Cup.svg"
+                  src="https://upload.wikimedia.org/wikipedia/en/thumb/a/a7/2025_FIFA_Club_World_Cup_logo.svg/1200px-2025_FIFA_Club_World_Cup_logo.svg.png"
                   alt="FIFA 2025"
                   className="w-full h-full object-contain"
                   onError={(e) => {
@@ -198,15 +201,20 @@ export function MainDashboard({ user, onLogout }: MainDashboardProps) {
             </div>
 
             <div className="flex items-center gap-4">
-              {/* Indicador de actualización automática */}
-              <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+              {/* Indicador de actualización automática mejorado */}
+              <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                <span>Actualización automática</span>
+                <span>Auto-sync: {lastRefresh.toLocaleTimeString()}</span>
               </div>
 
               <div className="flex items-center gap-2 text-sm text-gray-600">
                 <span className="text-lg">👤</span>
-                <span>{user.name}</span>
+                <span className="hidden sm:inline">{user.name}</span>
+                {user.phone && (
+                  <span className="text-green-600" title="WhatsApp disponible">
+                    📱
+                  </span>
+                )}
                 {isSuperAdmin && (
                   <span className="ml-2 px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full font-medium">
                     🔑 ADMIN
@@ -215,22 +223,27 @@ export function MainDashboard({ user, onLogout }: MainDashboardProps) {
               </div>
               <Button variant="outline" size="sm" onClick={onLogout}>
                 <span className="mr-2">🚪</span>
-                Cerrar Sesión
+                <span className="hidden sm:inline">Cerrar Sesión</span>
               </Button>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Instrucciones de Pull to Refresh para móvil */}
+      {/* Contenido principal con padding superior ajustado */}
+      <main
+        className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
+        style={{ paddingTop: isRefreshing ? "90px" : "32px" }}
+      >
+        {/* Instrucciones de Pull to Refresh para móvil - MEJORADAS */}
         <div className="sm:hidden mb-4">
           <Card className="bg-blue-50 border-blue-200">
             <CardContent className="p-3">
               <div className="flex items-center gap-2 text-sm text-blue-700">
                 <span>📱</span>
-                <span>Desliza hacia abajo para actualizar resultados en tiempo real</span>
+                <span>Desliza hacia abajo desde la parte superior para actualizar</span>
               </div>
+              <div className="text-xs text-blue-600 mt-1">Última actualización: {lastRefresh.toLocaleTimeString()}</div>
             </CardContent>
           </Card>
         </div>
@@ -241,7 +254,7 @@ export function MainDashboard({ user, onLogout }: MainDashboardProps) {
               <CardTitle className="text-2xl flex items-center gap-3">
                 <div className="w-12 h-12">
                   <img
-                    src="https://upload.wikimedia.org/wikipedia/commons/a/ad/2025_FIFA_Club_World_Cup.svg"
+                    src="https://upload.wikimedia.org/wikipedia/en/thumb/a/a7/2025_FIFA_Club_World_Cup_logo.svg/1200px-2025_FIFA_Club_World_Cup_logo.svg.png"
                     alt="FIFA 2025"
                     className="w-full h-full object-contain"
                     onError={(e) => {
@@ -280,8 +293,11 @@ export function MainDashboard({ user, onLogout }: MainDashboardProps) {
           </Card>
         </div>
 
+        {/* Tabs con z-index mejorado */}
         <Tabs defaultValue={isSuperAdmin ? "admin" : "predictions"} className="space-y-6">
-          <TabsList className={`grid w-full ${isSuperAdmin ? "grid-cols-3" : "grid-cols-2"}`}>
+          <TabsList
+            className={`grid w-full ${isSuperAdmin ? "grid-cols-3" : "grid-cols-2"} sticky top-20 z-40 bg-white shadow-md`}
+          >
             {!isSuperAdmin && (
               <TabsTrigger value="predictions" className="flex items-center gap-2">
                 <span>🎯</span>
@@ -308,7 +324,7 @@ export function MainDashboard({ user, onLogout }: MainDashboardProps) {
 
           {!isSuperAdmin && (
             <TabsContent value="predictions">
-              <PredictionsForm key={refreshKey} user={user} />
+              <PredictionsForm key={refreshKey} user={user} refreshKey={refreshKey} />
             </TabsContent>
           )}
 
@@ -319,7 +335,7 @@ export function MainDashboard({ user, onLogout }: MainDashboardProps) {
           {isSuperAdmin && (
             <>
               <TabsContent value="predictions">
-                <PredictionsForm key={refreshKey} user={user} />
+                <PredictionsForm key={refreshKey} user={user} refreshKey={refreshKey} />
               </TabsContent>
               <TabsContent value="admin">
                 <AdminPanel key={refreshKey} />

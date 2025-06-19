@@ -5,9 +5,16 @@ let sql: any = null
 
 if (typeof window === "undefined") {
   if (process.env.DATABASE_URL) {
-    sql = neon(process.env.DATABASE_URL)
+    try {
+      console.log("🔗 Inicializando conexión a base de datos...")
+      sql = neon(process.env.DATABASE_URL)
+      console.log("✅ Conexión a base de datos inicializada")
+    } catch (error) {
+      console.error("💥 Error al inicializar conexión a base de datos:", error)
+      sql = null
+    }
   } else {
-    console.warn("DATABASE_URL not set - database features will be disabled")
+    console.warn("⚠️ DATABASE_URL no configurada - funciones de base de datos deshabilitadas")
   }
 }
 

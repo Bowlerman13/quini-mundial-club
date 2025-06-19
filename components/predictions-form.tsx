@@ -7,29 +7,44 @@ import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { getTeamLogo } from "@/lib/team-logos"
 import { MobileScorePicker } from "./mobile-score-picker"
+import { formatDetailedTimestamp } from "@/lib/matches"
 import type { Match, Prediction } from "@/lib/db"
 
 interface PredictionsFormProps {
   user: any
+  refreshKey?: number // Para forzar actualizaciones
 }
 
-export function PredictionsForm({ user }: PredictionsFormProps) {
+export function PredictionsForm({ user, refreshKey = 0 }: PredictionsFormProps) {
   const [matches, setMatches] = useState<Match[]>([])
   const [predictions, setPredictions] = useState<Record<number, { home: number; away: number }>>({})
   const [userPredictions, setUserPredictions] = useState<Prediction[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [selectedGroup, setSelectedGroup] = useState<string>("A")
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
   const { toast } = useToast()
 
+  // Recargar datos cuando cambie refreshKey o user.id
   useEffect(() => {
     loadData()
+  }, [user.id, refreshKey])
+
+  // Auto-refresh cada 30 segundos para mantener datos actualizados
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadData(true) // Carga silenciosa
+    }, 30000)
+
+    return () => clearInterval(interval)
   }, [user.id])
 
-  const loadData = async () => {
+  const loadData = async (silent = false) => {
+    if (!silent) setIsLoading(true)
+
     try {
       const [matchesResponse, predictionsResponse] = await Promise.all([
-        fetch("/api/matches"),
-        fetch(`/api/predictions/${user.id}`),
+        fetch("/api/matches", { cache: "no-store" }),
+        fetch(`/api/predictions/${user.id}`, { cache: "no-store" }),
       ])
 
       if (matchesResponse.ok && predictionsResponse.ok) {
@@ -38,6 +53,7 @@ export function PredictionsForm({ user }: PredictionsFormProps) {
 
         setMatches(matchesData)
         setUserPredictions(predictionsData)
+        setLastUpdate(new Date())
 
         // Pre-fill existing predictions
         const existingPredictions: Record<number, { home: number; away: number }> = {}
@@ -56,20 +72,32 @@ export function PredictionsForm({ user }: PredictionsFormProps) {
         })
 
         setPredictions(existingPredictions)
-        console.log("Datos cargados:", {
-          matchesData: matchesData.length,
-          predictionsData: predictionsData.length,
-          existingPredictions,
-        })
+
+        if (!silent) {
+          console.log("✅ Datos actualizados:", {
+            matchesData: matchesData.length,
+            predictionsData: predictionsData.length,
+            timestamp: new Date().toISOString(),
+          })
+        }
       }
     } catch (error) {
       console.error("Error loading data:", error)
+      if (!silent) {
+        toast({
+          title: "❌ Error",
+          description: "Error al cargar los datos",
+          variant: "destructive",
+        })
+      }
+    } finally {
+      if (!silent) setIsLoading(false)
     }
   }
 
   // FUNCIÓN PARA CAMBIOS INMEDIATOS EN UI (sin guardar)
   const handlePredictionChange = (matchId: number, type: "home" | "away", value: number) => {
-    console.log(`Cambiando ${type} del partido ${matchId} de ${predictions[matchId]?.[type] || 0} a ${value}`)
+    console.log(`🔄 Cambiando ${type} del partido ${matchId} de ${predictions[matchId]?.[type] || 0} a ${value}`)
 
     setPredictions((prev) => {
       const currentPrediction = prev[matchId] || { home: 0, away: 0 }
@@ -78,7 +106,7 @@ export function PredictionsForm({ user }: PredictionsFormProps) {
         [type]: value,
       }
 
-      console.log(`Estado actualizado para partido ${matchId}:`, newPrediction)
+      console.log(`✅ Estado actualizado para partido ${matchId}:`, newPrediction)
 
       return {
         ...prev,
@@ -87,7 +115,7 @@ export function PredictionsForm({ user }: PredictionsFormProps) {
     })
   }
 
-  // FUNCIÓN PARA GUARDAR EN BASE DE DATOS
+  // FUNCIÓN PARA GUARDAR EN BASE DE DATOS CON ACTUALIZACIÓN AUTOMÁTICA
   const savePrediction = async (matchId: number) => {
     const prediction = predictions[matchId]
     if (!prediction) {
@@ -99,7 +127,7 @@ export function PredictionsForm({ user }: PredictionsFormProps) {
       return
     }
 
-    console.log(`Guardando predicción para partido ${matchId}:`, prediction)
+    console.log(`💾 Guardando predicción para partido ${matchId}:`, prediction)
 
     setIsLoading(true)
     try {
@@ -116,43 +144,18 @@ export function PredictionsForm({ user }: PredictionsFormProps) {
 
       if (response.ok) {
         const responseData = await response.json()
-        console.log("Respuesta del servidor:", responseData)
+        console.log("✅ Respuesta del servidor:", responseData)
 
         toast({
           title: "✅ Pronóstico guardado",
-          description: `Guardado: ${prediction.home} - ${prediction.away}`,
+          description: `Guardado: ${prediction.home} - ${prediction.away} a las ${new Date().toLocaleTimeString()}`,
         })
 
-        // RECARGAR DATOS SIN RESETEAR EL ESTADO LOCAL
-        const [matchesResponse, predictionsResponse] = await Promise.all([
-          fetch("/api/matches"),
-          fetch(`/api/predictions/${user.id}`),
-        ])
+        // ACTUALIZACIÓN AUTOMÁTICA INMEDIATA
+        await loadData(true) // Recargar datos silenciosamente
 
-        if (matchesResponse.ok && predictionsResponse.ok) {
-          const matchesData = await matchesResponse.json()
-          const predictionsData = await predictionsResponse.json()
-
-          setMatches(matchesData)
-          setUserPredictions(predictionsData)
-
-          // MANTENER LOS VALORES ACTUALES EN LA UI
-          // Solo actualizar si hay cambios desde el servidor
-          const serverPrediction = predictionsData.find((p: any) => p.match_id === matchId)
-          if (serverPrediction) {
-            setPredictions((prev) => ({
-              ...prev,
-              [matchId]: {
-                home: serverPrediction.home_score_prediction || 0,
-                away: serverPrediction.away_score_prediction || 0,
-              },
-            }))
-            console.log(`Predicción actualizada desde servidor para partido ${matchId}:`, {
-              home: serverPrediction.home_score_prediction,
-              away: serverPrediction.away_score_prediction,
-            })
-          }
-        }
+        // Actualizar timestamp de última actualización
+        setLastUpdate(new Date())
       } else {
         const data = await response.json()
         toast({
@@ -204,35 +207,34 @@ export function PredictionsForm({ user }: PredictionsFormProps) {
     {} as Record<string, Match[]>,
   )
 
-  const formatPredictionDate = (dateString: string) => {
-    if (!dateString) return ""
-
-    const options: Intl.DateTimeFormatOptions = {
-      timeZone: "America/Los_Angeles",
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }
-
-    return new Date(dateString).toLocaleString("es-ES", options) + " (PT)"
-  }
-
   // Obtener grupos disponibles
   const availableGroups = Object.keys(groupedMatches)
     .filter((key) => key.length === 1)
     .sort()
 
+  if (isLoading && matches.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-600 mx-auto"></div>
+        <p className="mt-4 text-gray-600">Cargando pronósticos...</p>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4 pb-20 px-2">
+      {/* Header con información de actualización */}
       <div className="text-center py-4">
         <h2 className="text-2xl font-bold text-yellow-600">⚽ Mis Pronósticos</h2>
         <p className="text-sm text-gray-600 mt-2">Toca los botones + y - para predecir, luego presiona GUARDAR</p>
+        <div className="mt-2 text-xs text-gray-500 bg-gray-100 rounded-full px-3 py-1 inline-block">
+          🕒 Última actualización: {lastUpdate.toLocaleTimeString()}
+          <span className="ml-2 w-2 h-2 bg-green-500 rounded-full inline-block animate-pulse"></span>
+        </div>
       </div>
 
       {/* Selector de grupos - Sticky para móvil */}
-      <div className="sticky top-0 z-20 bg-white shadow-lg rounded-lg p-3 mb-4">
+      <div className="sticky top-16 z-10 bg-white shadow-lg rounded-lg p-3 mb-4 border-2 border-yellow-200">
         <div className="flex flex-wrap gap-2 justify-center">
           {availableGroups.map((group) => (
             <Button
@@ -286,7 +288,9 @@ export function PredictionsForm({ user }: PredictionsFormProps) {
             return (
               <Card
                 key={match.id}
-                className={`border-2 shadow-lg ${isMatchFinished ? "border-gray-300 bg-gray-50" : "border-yellow-200"}`}
+                className={`border-2 shadow-lg transition-all duration-300 ${
+                  isMatchFinished ? "border-gray-300 bg-gray-50" : "border-yellow-200 hover:border-yellow-400"
+                }`}
               >
                 <CardContent className="p-4">
                   {/* Fecha y estado del partido */}
@@ -333,29 +337,44 @@ export function PredictionsForm({ user }: PredictionsFormProps) {
                     </div>
                   </div>
 
-                  {/* DEBUG INFO - MEJORADO */}
-                  <div
-                    className={`text-center mb-4 p-3 rounded text-sm border-2 ${
-                      isMatchFinished
-                        ? "bg-red-50 border-red-200 text-red-700"
-                        : "bg-blue-50 border-blue-200 text-blue-700"
-                    }`}
-                  >
-                    <div className="font-bold mb-1">🔍 DEBUG - Estado Actual:</div>
-                    <div>
-                      <strong>Tu Pronóstico:</strong> {currentPrediction.home} - {currentPrediction.away}
+                  {/* Información de actualización mejorada */}
+                  <div className="text-center mb-4 p-3 rounded border-2 bg-blue-50 border-blue-200">
+                    <div className="font-bold mb-2 text-blue-800">📊 Estado Actual del Pronóstico</div>
+                    <div className="grid grid-cols-1 gap-2 text-sm">
+                      <div className="bg-white p-2 rounded border">
+                        <strong className="text-blue-600">Tu Pronóstico Actual:</strong>
+                        <span className="ml-2 font-bold text-lg">
+                          {currentPrediction.home} - {currentPrediction.away}
+                        </span>
+                      </div>
+
+                      {existingPrediction && (
+                        <div className="bg-green-50 p-2 rounded border border-green-200">
+                          <strong className="text-green-600">Guardado en Base de Datos:</strong>
+                          <span className="ml-2">
+                            {existingPrediction.home_score_prediction} - {existingPrediction.away_score_prediction}
+                          </span>
+                          <div className="text-xs text-green-600 mt-1">
+                            📅 {formatDetailedTimestamp(existingPrediction.created_at)}
+                          </div>
+                          {existingPrediction.updated_at &&
+                            existingPrediction.updated_at !== existingPrediction.created_at && (
+                              <div className="text-xs text-orange-600 mt-1">
+                                🔄 Actualizado: {formatDetailedTimestamp(existingPrediction.updated_at)}
+                              </div>
+                            )}
+                        </div>
+                      )}
+
+                      {isMatchFinished && (
+                        <div className="bg-red-50 p-2 rounded border border-red-200">
+                          <strong className="text-red-600">Resultado Final:</strong>
+                          <span className="ml-2 font-bold">
+                            {match.home_score} - {match.away_score}
+                          </span>
+                        </div>
+                      )}
                     </div>
-                    {isMatchFinished && (
-                      <div className="mt-1">
-                        <strong>Resultado Real:</strong> {match.home_score} - {match.away_score}
-                      </div>
-                    )}
-                    {existingPrediction && (
-                      <div className="mt-1">
-                        <strong>En BD:</strong> {existingPrediction.home_score_prediction} -{" "}
-                        {existingPrediction.away_score_prediction}
-                      </div>
-                    )}
                   </div>
 
                   {/* Selectores de goles */}
@@ -379,26 +398,29 @@ export function PredictionsForm({ user }: PredictionsFormProps) {
                     />
                   </div>
 
-                  {/* BOTÓN GUARDAR - MANTENIDO */}
+                  {/* BOTÓN GUARDAR - MEJORADO */}
                   {!isMatchFinished && (
                     <div className="text-center">
                       <Button
                         onClick={() => savePrediction(match.id)}
                         disabled={isLoading}
-                        className="w-full max-w-xs bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 text-lg"
+                        className="w-full max-w-xs bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 text-lg transition-all duration-200 transform hover:scale-105"
                       >
-                        💾 {existingPrediction ? "ACTUALIZAR" : "GUARDAR"} PRONÓSTICO
-                        <br />
-                        <span className="text-sm">
-                          ({currentPrediction.home} - {currentPrediction.away})
-                        </span>
+                        {isLoading ? (
+                          <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            GUARDANDO...
+                          </div>
+                        ) : (
+                          <>
+                            💾 {existingPrediction ? "ACTUALIZAR" : "GUARDAR"} PRONÓSTICO
+                            <br />
+                            <span className="text-sm">
+                              ({currentPrediction.home} - {currentPrediction.away})
+                            </span>
+                          </>
+                        )}
                       </Button>
-                    </div>
-                  )}
-
-                  {existingPrediction && (
-                    <div className="text-xs text-center text-gray-500 mt-3">
-                      📅 Última actualización: {formatPredictionDate(existingPrediction.created_at)}
                     </div>
                   )}
                 </CardContent>

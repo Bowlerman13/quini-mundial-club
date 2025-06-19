@@ -15,21 +15,43 @@ export function AdminPanel() {
   const [results, setResults] = useState<Record<number, { home: number; away: number }>>({})
   const [isLoading, setIsLoading] = useState(false)
   const [filter, setFilter] = useState<string>("all")
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
   const { toast } = useToast()
 
   useEffect(() => {
     loadMatches()
   }, [])
 
-  const loadMatches = async () => {
+  // Auto-refresh cada 15 segundos para admin
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadMatches(true) // Carga silenciosa
+    }, 15000)
+
+    return () => clearInterval(interval)
+  }, [])
+
+  const loadMatches = async (silent = false) => {
     try {
-      const response = await fetch("/api/matches")
+      const response = await fetch("/api/matches", { cache: "no-store" })
       if (response.ok) {
         const data = await response.json()
         setMatches(data)
+        setLastUpdate(new Date())
+
+        if (!silent) {
+          console.log("✅ Admin: Partidos actualizados:", data.length)
+        }
       }
     } catch (error) {
       console.error("Error loading matches:", error)
+      if (!silent) {
+        toast({
+          title: "❌ Error",
+          description: "Error al cargar los partidos",
+          variant: "destructive",
+        })
+      }
     }
   }
 
@@ -63,9 +85,14 @@ export function AdminPanel() {
       if (response.ok) {
         toast({
           title: "✅ Resultado guardado",
-          description: "El resultado ha sido actualizado y los puntos calculados automáticamente",
+          description: `Resultado ${result.home}-${result.away} guardado a las ${new Date().toLocaleTimeString()}`,
         })
-        loadMatches() // Reload matches
+
+        // ACTUALIZACIÓN AUTOMÁTICA INMEDIATA
+        await loadMatches(true) // Reload matches silently
+        setLastUpdate(new Date())
+
+        // Limpiar el resultado temporal
         setResults((prev) => {
           const newResults = { ...prev }
           delete newResults[matchId]
@@ -139,9 +166,14 @@ export function AdminPanel() {
 
   return (
     <div className="space-y-6">
+      {/* Header con información de actualización */}
       <div className="text-center">
         <h2 className="text-2xl font-bold">🔑 Panel de Superadministrador</h2>
-        <p className="text-muted-foreground">Gestiona los resultados de los partidos del Mundial de Clubes</p>
+        <p className="text-muted-foreground">Gestiona los resultados del Mundial de Clubes FIFA 2025</p>
+        <div className="mt-2 text-xs text-gray-500 bg-gray-100 rounded-full px-3 py-1 inline-block">
+          🕒 Última sincronización: {lastUpdate.toLocaleTimeString()}
+          <span className="ml-2 w-2 h-2 bg-green-500 rounded-full inline-block animate-pulse"></span>
+        </div>
       </div>
 
       {/* Filtros */}
@@ -182,7 +214,7 @@ export function AdminPanel() {
         </CardContent>
       </Card>
 
-      {/* Estadísticas */}
+      {/* Estadísticas mejoradas */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4 text-center">
@@ -210,16 +242,22 @@ export function AdminPanel() {
         </Card>
       </div>
 
-      {/* Lista de partidos */}
+      {/* Lista de partidos con actualización automática */}
       <div className="space-y-4">
         {Object.entries(groupedMatches).map(([groupName, groupMatches]) => (
           <Card key={groupName}>
             <CardHeader>
               <CardTitle className="text-lg flex items-center justify-between">
                 <span>{groupName}</span>
-                <Badge variant="outline">
-                  {groupMatches.filter((m) => m.is_finished).length}/{groupMatches.length} finalizados
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">
+                    {groupMatches.filter((m) => m.is_finished).length}/{groupMatches.length} finalizados
+                  </Badge>
+                  <div
+                    className="w-2 h-2 bg-green-500 rounded-full animate-pulse"
+                    title="Actualización automática activa"
+                  ></div>
+                </div>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -229,7 +267,11 @@ export function AdminPanel() {
                 return (
                   <div
                     key={match.id}
-                    className={`border rounded-lg p-4 space-y-3 ${match.is_finished ? "bg-green-50 border-green-200" : "bg-yellow-50 border-yellow-200"}`}
+                    className={`border rounded-lg p-4 space-y-3 transition-all duration-300 ${
+                      match.is_finished
+                        ? "bg-green-50 border-green-200 shadow-sm"
+                        : "bg-yellow-50 border-yellow-200 hover:shadow-md"
+                    }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="text-sm text-muted-foreground">📅 {formatDate(match.match_date)}</div>
@@ -258,31 +300,80 @@ export function AdminPanel() {
                         <div className="text-sm text-muted-foreground">🏴 {match.home_team?.country}</div>
                       </div>
 
-                      <div className="flex items-center space-x-2 mx-4">
+                      {/* Selectores de goles para admin */}
+                      <div className="flex justify-center items-center space-x-4">
                         <div className="flex flex-col items-center space-y-1">
                           <Label className="text-xs font-semibold">Local</Label>
-                          <Input
-                            type="number"
-                            min="0"
-                            max="20"
-                            className="w-16 text-center font-bold"
-                            value={currentResult.home}
-                            onChange={(e) => handleResultChange(match.id, "home", e.target.value)}
-                          />
+                          <div className="flex items-center space-x-1">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-sm"
+                              onClick={() =>
+                                handleResultChange(match.id, "home", String(Math.max(0, currentResult.home - 1)))
+                              }
+                            >
+                              -
+                            </Button>
+                            <Input
+                              type="number"
+                              min="0"
+                              max="20"
+                              className="w-16 text-center font-bold"
+                              value={currentResult.home}
+                              onChange={(e) => handleResultChange(match.id, "home", e.target.value)}
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-sm"
+                              onClick={() =>
+                                handleResultChange(match.id, "home", String(Math.min(20, currentResult.home + 1)))
+                              }
+                            >
+                              +
+                            </Button>
+                          </div>
                         </div>
 
                         <div className="text-xl font-bold">-</div>
 
                         <div className="flex flex-col items-center space-y-1">
                           <Label className="text-xs font-semibold">Visitante</Label>
-                          <Input
-                            type="number"
-                            min="0"
-                            max="20"
-                            className="w-16 text-center font-bold"
-                            value={currentResult.away}
-                            onChange={(e) => handleResultChange(match.id, "away", e.target.value)}
-                          />
+                          <div className="flex items-center space-x-1">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-sm"
+                              onClick={() =>
+                                handleResultChange(match.id, "away", String(Math.max(0, currentResult.away - 1)))
+                              }
+                            >
+                              -
+                            </Button>
+                            <Input
+                              type="number"
+                              min="0"
+                              max="20"
+                              className="w-16 text-center font-bold"
+                              value={currentResult.away}
+                              onChange={(e) => handleResultChange(match.id, "away", e.target.value)}
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-sm"
+                              onClick={() =>
+                                handleResultChange(match.id, "away", String(Math.min(20, currentResult.away + 1)))
+                              }
+                            >
+                              +
+                            </Button>
+                          </div>
                         </div>
                       </div>
 
@@ -304,9 +395,16 @@ export function AdminPanel() {
                         onClick={() => saveResult(match.id)}
                         disabled={isLoading}
                         size="sm"
-                        className="bg-red-600 hover:bg-red-700 text-white font-semibold"
+                        className="bg-red-600 hover:bg-red-700 text-white font-semibold transition-all duration-200 transform hover:scale-105"
                       >
-                        💾 {match.is_finished ? "🔄 Actualizar Resultado" : "✅ Guardar Resultado"}
+                        {isLoading ? (
+                          <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            Guardando...
+                          </div>
+                        ) : (
+                          <>💾 {match.is_finished ? "🔄 Actualizar Resultado" : "✅ Guardar Resultado"}</>
+                        )}
                       </Button>
                     </div>
                   </div>
