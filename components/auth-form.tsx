@@ -159,22 +159,14 @@ export function AuthForm({ onLogin }: AuthFormProps) {
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-yellow-50 to-amber-100">
       <div className="w-full max-w-md px-4">
-        {/* LOGO OFICIAL DEL MUNDIAL DE CLUBES FIFA 2025 */}
+        {/* LOGO DEPORTIVO GENÉRICO */}
         <div className="text-center mb-8">
-          <div className="w-32 h-32 mx-auto mb-4 relative">
-            <img
-              src="https://upload.wikimedia.org/wikipedia/commons/a/ad/2025_FIFA_Club_World_Cup.svg"
-              alt="FIFA Club World Cup 2025"
-              className="w-full h-full object-contain drop-shadow-lg"
-              onError={(e) => {
-                // Fallback si no carga el logo oficial
-                e.currentTarget.src = "/placeholder.svg?height=128&width=128&text=FIFA+2025"
-              }}
-            />
+          <div className="w-32 h-32 mx-auto mb-4 relative flex items-center justify-center bg-gradient-to-br from-yellow-500 to-amber-600 rounded-full shadow-2xl">
+            <div className="text-6xl">🏆</div>
           </div>
           <div className="space-y-2">
-            <h1 className="text-3xl font-bold text-yellow-600 drop-shadow-sm">FIFA Club World Cup</h1>
-            <p className="text-lg font-semibold text-amber-700">USA 2025</p>
+            <h1 className="text-3xl font-bold text-yellow-600 drop-shadow-sm">Mundial de Clubes</h1>
+            <p className="text-lg font-semibold text-amber-700">Torneo Internacional 2025</p>
             <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
               <span>🗓️ 15 Jun - 13 Jul</span>
               <span>•</span>
